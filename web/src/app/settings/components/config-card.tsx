@@ -536,7 +536,7 @@ export function ConfigCard() {
         <section className={configSectionClassName}>
           <SectionHeading
             title="自动维护"
-            tip="账号异常、限流或到达销毁时间时自动从号池移除。"
+            tip="账号异常、限流或注册机账号到达销毁时间时自动从号池移除。"
           />
           <div className="grid gap-2 sm:grid-cols-2">
             <ConfigOption
@@ -552,7 +552,7 @@ export function ConfigCard() {
             <ConfigOption
               checked={Boolean(config?.auto_destroy_accounts_enabled)}
               onCheckedChange={setAutoDestroyAccountsEnabled}
-              label="自动销毁新入池账号"
+              label="自动销毁注册机账号"
             />
             <Field
               className={cn(
@@ -562,7 +562,7 @@ export function ConfigCard() {
               )}
             >
               <ConfigFieldLabel htmlFor="settings-auto-destroy-account-minutes">
-                销毁时间
+                注册机账号销毁时间
               </ConfigFieldLabel>
               <NumberInputWithUnit
                 id="settings-auto-destroy-account-minutes"

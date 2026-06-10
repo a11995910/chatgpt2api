@@ -309,8 +309,8 @@ go build -tags=embed -ldflags "-X chatgpt2api/internal/version.Version=1.0.0" -o
 | `CHATGPT2API_LOG_RETENTION_DAYS` | `7` | 业务日志保留天数 |
 | `CHATGPT2API_AUTO_REMOVE_INVALID_ACCOUNTS` | `true` | 是否自动移除失效账号 |
 | `CHATGPT2API_AUTO_REMOVE_RATE_LIMITED_ACCOUNTS` | `false` | 是否自动移除限流账号 |
-| `CHATGPT2API_AUTO_DESTROY_ACCOUNTS_ENABLED` | `false` | 是否自动销毁新进入号池的账号 |
-| `CHATGPT2API_AUTO_DESTROY_ACCOUNT_MINUTES` | `60` | 新入池账号自动销毁时间，单位分钟 |
+| `CHATGPT2API_AUTO_DESTROY_ACCOUNTS_ENABLED` | `false` | 是否自动销毁注册机新注册进入号池的账号；手动导入、CPA、Sub2API 导入不受影响 |
+| `CHATGPT2API_AUTO_DESTROY_ACCOUNT_MINUTES` | `60` | 注册机账号自动销毁时间，单位分钟 |
 | `CHATGPT2API_LOG_LEVELS` | 空 | 日志级别过滤，多个值用逗号分隔：`debug,info,warning,error` |
 
 ### 存储后端

@@ -175,11 +175,22 @@ func (s *AccountService) listRefreshableLimitedTokens(now time.Time) []string {
 }
 
 func (s *AccountService) AddAccounts(tokens []string) map[string]any {
+	return s.addAccounts(tokens, false)
+}
+
+func (s *AccountService) AddRegisteredAccounts(tokens []string) map[string]any {
+	return s.addAccounts(tokens, true)
+}
+
+func (s *AccountService) addAccounts(tokens []string, autoDestroy bool) map[string]any {
 	cleaned := cleanTokens(tokens)
 	if len(cleaned) == 0 {
 		return map[string]any{"added": 0, "skipped": 0, "items": s.ListAccounts()}
 	}
-	autoDestroyAt := s.newAutoDestroyDeadline()
+	autoDestroyAt := ""
+	if autoDestroy {
+		autoDestroyAt = s.newAutoDestroyDeadline()
+	}
 	s.mu.Lock()
 	indexed := map[string]map[string]any{}
 	order := make([]string, 0, len(s.items)+len(cleaned))
@@ -201,6 +212,7 @@ func (s *AccountService) AddAccounts(tokens []string) map[string]any {
 			current = map[string]any{}
 			if autoDestroyAt != "" {
 				current["auto_destroy_at"] = autoDestroyAt
+				current["auto_destroy_source"] = "register"
 			}
 			order = append(order, token)
 		}
@@ -1403,6 +1415,9 @@ func (s *AccountService) listExpiredAutoDestroyTokens(now time.Time) []string {
 		if token == "" {
 			continue
 		}
+		if util.Clean(item["auto_destroy_source"]) != "register" {
+			continue
+		}
 		destroyAt, ok := parseAccountTime(item["auto_destroy_at"])
 		if ok && !destroyAt.After(now) {
 			out = append(out, token)
@@ -1649,6 +1664,11 @@ func normalizeAccount(item map[string]any) map[string]any {
 	} else {
 		normalized["auto_destroy_at"] = nil
 	}
+	if autoDestroySource := util.Clean(normalized["auto_destroy_source"]); autoDestroySource != "" {
+		normalized["auto_destroy_source"] = autoDestroySource
+	} else {
+		normalized["auto_destroy_source"] = nil
+	}
 	normalized["success"] = util.ToInt(normalized["success"], 0)
 	normalized["fail"] = util.ToInt(normalized["fail"], 0)
 	return normalized
@@ -1660,6 +1680,10 @@ func publicAccounts(accounts []map[string]any) []map[string]any {
 		token := util.Clean(account["access_token"])
 		if token == "" {
 			continue
+		}
+		autoDestroyAt := any(nil)
+		if util.Clean(account["auto_destroy_source"]) == "register" {
+			autoDestroyAt = account["auto_destroy_at"]
 		}
 		out = append(out, map[string]any{
 			"id":                 accountIDFromToken(token),
@@ -1675,7 +1699,7 @@ func publicAccounts(accounts []map[string]any) []map[string]any {
 			"limits_progress":    util.ValueOr(account["limits_progress"], []any{}),
 			"default_model_slug": account["default_model_slug"],
 			"restoreAt":          account["restore_at"],
-			"autoDestroyAt":      account["auto_destroy_at"],
+			"autoDestroyAt":      autoDestroyAt,
 			"success":            util.ToInt(account["success"], 0),
 			"fail":               util.ToInt(account["fail"], 0),
 			"lastUsedAt":         account["last_used_at"],

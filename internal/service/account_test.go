@@ -115,11 +115,39 @@ func TestNormalizeAccountPreservesChatGPTAccountID(t *testing.T) {
 	}
 }
 
-func TestAddAccountsSetsAutoDestroyDeadlineForNewAccounts(t *testing.T) {
+func TestAddAccountsDoesNotSetAutoDestroyDeadline(t *testing.T) {
+	accounts := newTestAccountServiceWithConfig(t, testAccountConfig{autoDestroyEnabled: true, autoDestroyMinutes: 3})
+
+	result := accounts.AddAccounts([]string{"token-1"})
+	if result["added"] != 1 {
+		t.Fatalf("added = %#v, want 1", result["added"])
+	}
+	account := accounts.GetAccount("token-1")
+	if account["auto_destroy_at"] != nil {
+		t.Fatalf("auto_destroy_at = %#v, want nil for normal import", account["auto_destroy_at"])
+	}
+	if account["auto_destroy_source"] != nil {
+		t.Fatalf("auto_destroy_source = %#v, want nil for normal import", account["auto_destroy_source"])
+	}
+	items, ok := result["items"].([]map[string]any)
+	if !ok || len(items) != 1 || items[0]["autoDestroyAt"] != nil {
+		t.Fatalf("public items = %#v, want no autoDestroyAt", result["items"])
+	}
+
+	accounts.UpdateAccount("token-1", map[string]any{
+		"auto_destroy_at": time.Now().Add(time.Minute).UTC().Format(time.RFC3339),
+	})
+	listed := accounts.ListAccounts()
+	if len(listed) != 1 || listed[0]["autoDestroyAt"] != nil {
+		t.Fatalf("legacy normal import public items = %#v, want no autoDestroyAt", listed)
+	}
+}
+
+func TestAddRegisteredAccountsSetsAutoDestroyDeadline(t *testing.T) {
 	accounts := newTestAccountServiceWithConfig(t, testAccountConfig{autoDestroyEnabled: true, autoDestroyMinutes: 3})
 	before := time.Now().UTC().Add(3*time.Minute - time.Second)
 
-	result := accounts.AddAccounts([]string{"token-1"})
+	result := accounts.AddRegisteredAccounts([]string{"token-1"})
 	if result["added"] != 1 {
 		t.Fatalf("added = %#v, want 1", result["added"])
 	}
@@ -132,12 +160,15 @@ func TestAddAccountsSetsAutoDestroyDeadlineForNewAccounts(t *testing.T) {
 	if destroyAt.Before(before) || destroyAt.After(after) {
 		t.Fatalf("auto_destroy_at = %s, want between %s and %s", destroyAt, before, after)
 	}
+	if account["auto_destroy_source"] != "register" {
+		t.Fatalf("auto_destroy_source = %#v, want register", account["auto_destroy_source"])
+	}
 	items, ok := result["items"].([]map[string]any)
 	if !ok || len(items) != 1 || items[0]["autoDestroyAt"] == nil {
 		t.Fatalf("public items = %#v, want autoDestroyAt", result["items"])
 	}
 
-	accounts.AddAccounts([]string{"token-1"})
+	accounts.AddRegisteredAccounts([]string{"token-1"})
 	unchanged := accounts.GetAccount("token-1")
 	if unchanged["auto_destroy_at"] != account["auto_destroy_at"] {
 		t.Fatalf("duplicate import changed auto_destroy_at from %#v to %#v", account["auto_destroy_at"], unchanged["auto_destroy_at"])
@@ -906,14 +937,18 @@ func TestStartLimitedWatcherSkipsAccountBeforeRestoreTime(t *testing.T) {
 	}
 }
 
-func TestStartAutoDestroyWatcherDeletesExpiredAccounts(t *testing.T) {
+func TestStartAutoDestroyWatcherDeletesOnlyExpiredRegisteredAccounts(t *testing.T) {
 	accounts := newTestAccountServiceWithConfig(t, testAccountConfig{autoDestroyEnabled: true, autoDestroyMinutes: 1})
-	accounts.AddAccounts([]string{"expired-token", "future-token"})
+	accounts.AddRegisteredAccounts([]string{"expired-token", "future-token"})
 	accounts.UpdateAccount("expired-token", map[string]any{
 		"auto_destroy_at": time.Now().Add(-time.Second).UTC().Format(time.RFC3339),
 	})
 	accounts.UpdateAccount("future-token", map[string]any{
 		"auto_destroy_at": time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
+	})
+	accounts.AddAccounts([]string{"manual-token"})
+	accounts.UpdateAccount("manual-token", map[string]any{
+		"auto_destroy_at": time.Now().Add(-time.Second).UTC().Format(time.RFC3339),
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -932,6 +967,9 @@ func TestStartAutoDestroyWatcherDeletesExpiredAccounts(t *testing.T) {
 	}
 	if account := accounts.GetAccount("future-token"); account == nil {
 		t.Fatal("future account was removed")
+	}
+	if account := accounts.GetAccount("manual-token"); account == nil {
+		t.Fatal("manual account without register source was removed")
 	}
 }
 
